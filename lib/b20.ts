@@ -1,4 +1,4 @@
-import { createPublicClient, http, defineChain } from 'viem';
+import { createPublicClient, http, defineChain, fallback } from 'viem';
 
 // Define Vibenet as a custom chain for viem
 export const baseVibenet = defineChain({
@@ -45,9 +45,29 @@ export function getChainById(chainId: number) {
 
 export function getPublicClient(chainId: number) {
   const chain = getChainById(chainId);
+  
+  // Choose transport list based on chain to prevent rate limit (HTTP 429) errors
+  const transports = [];
+  if (chainId === 8453) {
+    const customUrl = process.env.NEXT_PUBLIC_BASE_RPC_URL;
+    if (customUrl) transports.push(http(customUrl));
+    transports.push(http('https://developer-access-mainnet.base.org'));
+    transports.push(http('https://base.llamarpc.com'));
+    transports.push(http('https://1rpc.io/base'));
+    transports.push(http('https://mainnet.base.org'));
+  } else if (chainId === 84532) {
+    const customUrl = process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL;
+    if (customUrl) transports.push(http(customUrl));
+    transports.push(http('https://sepolia.base.org'));
+    transports.push(http('https://base-sepolia.blockpi.network/v1/rpc/public'));
+    transports.push(http('https://base-sepolia.public.blastapi.io'));
+  } else {
+    transports.push(http('https://rpc.vibes.base.org'));
+  }
+
   return createPublicClient({
     chain,
-    transport: http(),
+    transport: fallback(transports),
   });
 }
 

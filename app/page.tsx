@@ -158,7 +158,7 @@ export default function Home() {
   const [adminPendingOwner, setAdminPendingOwner] = useState('');
   const [adminContractBalance, setAdminContractBalance] = useState('0');
   const [adminDetailsLoading, setAdminDetailsLoading] = useState(false);
-  
+
   // Inputs
   const [inputNewFee, setInputNewFee] = useState('');
   const [inputWithdrawTo, setInputWithdrawTo] = useState('');
@@ -253,7 +253,7 @@ export default function Home() {
         setUserTokens([]);
         return;
       }
-      
+
       if (isSupabaseConfigured) {
         try {
           const { data, error } = await supabase
@@ -385,12 +385,12 @@ export default function Home() {
               count++;
               total += rawAmount;
             }
-          } catch (e) {}
+          } catch (e) { }
         }
       }
     }
     setBatchRecipientsCount(count);
-    setBatchTotalTokens((Number(total) / 10**decimalsVal).toString());
+    setBatchTotalTokens((Number(total) / 10 ** decimalsVal).toString());
   }, [batchRecipientList, mintTokenDetails]);
 
   const fetchBalance = async (address: string, activeChainId: number) => {
@@ -416,7 +416,7 @@ export default function Home() {
         params: [txHash]
       });
       if (!tx) return '';
-      
+
       const callParams = {
         from: tx.from,
         to: tx.to,
@@ -425,7 +425,7 @@ export default function Home() {
         gas: tx.gas,
         gasPrice: tx.gasPrice
       };
-      
+
       try {
         await (window as any).ethereum.request({
           method: 'eth_call',
@@ -467,7 +467,7 @@ export default function Home() {
       const address = accounts[0];
       setWalletAddress(address);
       setWalletConnected(true);
-      
+
       // Save persistence flag
       localStorage.setItem('wallet_connected_previously', 'true');
 
@@ -604,25 +604,29 @@ export default function Home() {
       // Using a flat 5-field encoding (288 bytes) fails with "buffer overrun" or "type check failed".
       const params = variant === 'ASSET'
         ? encodeAbiParameters(
-            [{ type: 'tuple', components: [
+          [{
+            type: 'tuple', components: [
               { name: 'version', type: 'uint8' },
               { name: 'name', type: 'string' },
               { name: 'symbol', type: 'string' },
               { name: 'initialAdmin', type: 'address' },
               { name: 'decimals', type: 'uint8' }
-            ]}],
-            [{ version: 1, name, symbol: symbol.toUpperCase(), initialAdmin: adminAddr, decimals: decimalsVal }]
-          ) as `0x${string}`
+            ]
+          }],
+          [{ version: 1, name, symbol: symbol.toUpperCase(), initialAdmin: adminAddr, decimals: decimalsVal }]
+        ) as `0x${string}`
         : encodeAbiParameters(
-            [{ type: 'tuple', components: [
+          [{
+            type: 'tuple', components: [
               { name: 'version', type: 'uint8' },
               { name: 'name', type: 'string' },
               { name: 'symbol', type: 'string' },
               { name: 'initialAdmin', type: 'address' },
               { name: 'currency', type: 'string' }
-            ]}],
-            [{ version: 1, name, symbol: symbol.toUpperCase(), initialAdmin: adminAddr, currency: currency.toUpperCase() }]
-          ) as `0x${string}`;
+            ]
+          }],
+          [{ version: 1, name, symbol: symbol.toUpperCase(), initialAdmin: adminAddr, currency: currency.toUpperCase() }]
+        ) as `0x${string}`;
 
       // Build initialization calls
       const initCalls: `0x${string}`[] = [];
@@ -745,26 +749,37 @@ export default function Home() {
       let tokenAddress = '';
 
       // The B20Factory emits: B20Created(address indexed token, uint8 indexed variant, ...)
-      // Topic[0] = event signature, Topic[1] = token address (padded to 32 bytes)
       const B20_CREATED_TOPIC = '0xfd9bf2730513a1709722ff379a0844dfd8f997d600693c2bcc659e188bbdba0d';
+      
+      // B20Deployer emits: TokenDeployed(address indexed deployer, address indexed token, uint256 feePaid)
+      const TOKEN_DEPLOYED_TOPIC = '0xf1d58912d8d6d39cd9fee0f074ee57836907d09dddb0ce7706b7c7a0ddc15d50';
+      
       const FACTORY_ADDR = B20_FACTORY_ADDRESS.toLowerCase();
+      const DEPLOYER_ADDR = B20_DEPLOYER_CONTRACT_ADDRESS ? B20_DEPLOYER_CONTRACT_ADDRESS.toLowerCase() : '';
 
       if (receipt.logs) {
         for (const log of receipt.logs) {
-          // Check for B20Created event from the factory
+          // 1. Check for TokenDeployed event from our custom deployer contract (Option B wrapper path)
+          if (
+            log.topics && log.topics[0] && log.topics[0].toLowerCase() === TOKEN_DEPLOYED_TOPIC &&
+            log.topics[2]
+          ) {
+            tokenAddress = '0x' + log.topics[2].slice(-40);
+            break;
+          }
+          // 2. Check for B20Created event from the precompile factory (Option A direct path)
           if (
             log.address && log.address.toLowerCase() === FACTORY_ADDR &&
             log.topics && log.topics[0] && log.topics[0].toLowerCase() === B20_CREATED_TOPIC &&
             log.topics[1]
           ) {
-            // Token address is in topic[1] — extract last 20 bytes (40 hex chars)
             tokenAddress = '0x' + log.topics[1].slice(-40);
             break;
           }
         }
       }
 
-      // Fallback: look for any log from a 0xB200... address (direct factory call path)
+      // Fallback: look for any log where the emitter address starts with 0xb200 (direct precompile log)
       if (!tokenAddress && receipt.logs) {
         const matchingLog = receipt.logs.find(
           (l: any) => l.address && l.address.toLowerCase().startsWith('0xb200')
@@ -807,7 +822,7 @@ export default function Home() {
       setUserTokens(nextTokens);
       if (activeAddress) {
         localStorage.setItem(`deployed_b20_tokens_${activeAddress.toLowerCase()}`, JSON.stringify(nextTokens));
-        
+
         if (isSupabaseConfigured) {
           (async () => {
             try {
@@ -969,7 +984,7 @@ export default function Home() {
 
       setMintTxSuccess(txHash);
       setMintAmount('');
-      
+
       await fetchBalance(activeAddress, chainId);
       await handleMintSearch();
     } catch (err: any) {
@@ -1053,7 +1068,7 @@ export default function Home() {
 
     try {
       const decimalsVal = mintTokenDetails.decimals;
-      
+
       // Build the calls array
       const calls = recipients.map(r => {
         const rawAmount = parseUnits(r.amount, decimalsVal);
@@ -1075,7 +1090,7 @@ export default function Home() {
       try {
         setBatchMintProgress('Attempting atomic batch call (wallet_sendCalls)...');
         const hexChainId = '0x' + chainId.toString(16);
-        
+
         const response = await (window as any).ethereum.request({
           method: 'wallet_sendCalls',
           params: [{
@@ -1096,7 +1111,7 @@ export default function Home() {
         }
       } catch (batchErr: any) {
         console.warn('wallet_sendCalls not supported, falling back to sequential eth_sendTransactions...', batchErr);
-        
+
         // Sequential fallback
         setBatchMintProgress(`Sequential fallback: sending ${calls.length} transactions...`);
         for (let i = 0; i < calls.length; i++) {
@@ -1509,7 +1524,7 @@ export default function Home() {
       setUserTokens(filtered);
       if (walletAddress) {
         localStorage.setItem(`deployed_b20_tokens_${walletAddress.toLowerCase()}`, JSON.stringify(filtered));
-        
+
         if (isSupabaseConfigured) {
           (async () => {
             try {
@@ -1596,7 +1611,7 @@ export default function Home() {
     setImportLoading(true);
     try {
       const details = await fetchOnchainToken(importAddr as `0x${string}`, chainId, walletAddress ? (walletAddress as `0x${string}`) : undefined);
-      
+
       const newImport: DeployedToken = {
         name: details.name,
         symbol: details.symbol,
@@ -1768,7 +1783,7 @@ export default function Home() {
                   </div>
                 </div>
               )}
-              
+
               <button
                 onClick={() => (walletConnected ? handleDisconnectWallet() : setWalletModalOpen(true))}
                 className={cn(
@@ -1951,10 +1966,10 @@ export default function Home() {
 
                   {/* Operational Layout */}
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-                    
+
                     {/* LEFT COLUMN: Operations and Forms */}
                     <div className="space-y-6">
-                      
+
                       {/* SUB-SECTION 1: DEPLOY FORM */}
                       {workspaceTab === 'deploy' && (
                         <form onSubmit={handleDeploy} className="bg-[#0f1115] p-6 rounded-3xl border border-white/5 space-y-5 shadow-2xl text-left">
@@ -2187,7 +2202,7 @@ export default function Home() {
                                   <Sliders className="w-4 h-4 text-blue-400" />
                                   Execute Mint
                                 </h3>
-                                
+
                                 <div className="flex bg-[#07080a] p-0.5 rounded-lg border border-white/5">
                                   <button
                                     type="button"
@@ -2240,7 +2255,7 @@ export default function Home() {
                                     </div>
 
                                     {mintTxError && <p className="text-[10px] text-rose-400 font-semibold">{mintTxError}</p>}
-                                    
+
                                     {mintTxSuccess && (
                                       <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-[10px] text-emerald-400 leading-normal flex items-start gap-1.5">
                                         <Check className="w-3.5 h-3.5 shrink-0 mt-0.5 text-emerald-500" />
@@ -2308,7 +2323,7 @@ export default function Home() {
                                     {batchMintError && (
                                       <p className="text-[10px] text-rose-400 font-semibold whitespace-pre-line leading-relaxed max-h-[80px] overflow-y-auto bg-rose-950/15 p-2 rounded-lg border border-rose-900/20">{batchMintError}</p>
                                     )}
-                                    
+
                                     {batchMintSuccess && (
                                       <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-[10px] text-emerald-400 leading-normal flex items-start gap-1.5">
                                         <Check className="w-3.5 h-3.5 shrink-0 mt-0.5 text-emerald-500" />
@@ -2451,7 +2466,7 @@ export default function Home() {
                                 </div>
 
                                 {payTxError && <p className="text-[10px] text-rose-400 font-semibold">{payTxError}</p>}
-                                
+
                                 {payTxSuccess && (
                                   <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-[10px] text-emerald-400 leading-normal flex items-start gap-1.5">
                                     <Check className="w-3.5 h-3.5 shrink-0 mt-0.5 text-emerald-500" />
@@ -2479,16 +2494,16 @@ export default function Home() {
                         </div>
                       )}
 
-                      
+
                       {/* Sub-section 4 removed */}
                     </div>
 
                     {/* RIGHT COLUMN: Visual Loop Animations & Descriptions */}
                     <div className="space-y-6 text-left">
-                      
+
                       {/* Explainer Panel Card */}
                       <div className="bg-[#0f1115] p-5 rounded-3xl border border-white/5 shadow-2xl space-y-5">
-                        
+
                         {/* Section Header */}
                         <div className="flex justify-between items-center border-b border-white/5 pb-3">
                           <span className="text-[10px] font-mono font-bold uppercase text-blue-400 tracking-widest block leading-none">
@@ -2503,9 +2518,9 @@ export default function Home() {
 
                         {/* HIGH FIDELITY CYBERPUNK ANIMATION PANEL */}
                         <div className="bg-[#07080a] rounded-3xl p-6 border border-white/5 min-h-[220px] flex flex-col justify-center items-center relative overflow-hidden bg-[radial-gradient(circle_at_center,_#0f172a_0%,_#07080a_100%)]">
-                          
+
                           {/* Tech Grid Background */}
-                          <div 
+                          <div
                             className="absolute inset-0 opacity-15 pointer-events-none"
                             style={{
                               backgroundImage: 'linear-gradient(to right, rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.05) 1px, transparent 1px)',
@@ -2514,7 +2529,7 @@ export default function Home() {
                           />
 
                           <AnimatePresence mode="wait">
-                            
+
                             {/* Deploy Animation */}
                             {workspaceTab === 'deploy' && (
                               <motion.div
@@ -2526,7 +2541,7 @@ export default function Home() {
                               >
                                 {/* Running SVG laser stream */}
                                 <div className="w-full max-w-sm flex items-center justify-between relative h-20">
-                                  
+
                                   {/* Laser Line */}
                                   <svg className="absolute inset-0 w-full h-full pointer-events-none" preserveAspectRatio="none">
                                     <defs>
@@ -2537,8 +2552,8 @@ export default function Home() {
                                       </linearGradient>
                                     </defs>
                                     <line x1="15%" y1="50%" x2="85%" y2="50%" stroke="rgba(255,255,255,0.05)" strokeWidth="4" strokeLinecap="round" />
-                                    <motion.line 
-                                      x1="15%" y1="50%" x2="85%" y2="50%" 
+                                    <motion.line
+                                      x1="15%" y1="50%" x2="85%" y2="50%"
                                       stroke="url(#deployGrad)" strokeWidth="4" strokeLinecap="round"
                                       strokeDasharray="40 180"
                                       animate={{ strokeDashoffset: [0, -220] }}
@@ -2548,7 +2563,7 @@ export default function Home() {
 
                                   {/* Source Node: Wallet */}
                                   <div className="z-10 flex flex-col items-center">
-                                    <motion.div 
+                                    <motion.div
                                       animate={{ boxShadow: ['0 0 0 0px rgba(59,130,246,0.3)', '0 0 0 8px rgba(59,130,246,0)'] }}
                                       transition={{ repeat: Infinity, duration: 2 }}
                                       className="w-10 h-10 bg-blue-950/80 border border-blue-500/30 rounded-2xl flex items-center justify-center shadow-lg"
@@ -2561,12 +2576,12 @@ export default function Home() {
                                   {/* Precompile Node: B20 Factory */}
                                   <div className="z-10 flex flex-col items-center relative">
                                     {/* Double Validation Rings */}
-                                    <motion.div 
+                                    <motion.div
                                       animate={{ scale: [1, 1.8], opacity: [0.6, 0] }}
                                       transition={{ repeat: Infinity, duration: 2, ease: "easeOut" }}
                                       className="absolute -inset-1 rounded-full border border-sky-400/40 -z-0"
                                     />
-                                    <motion.div 
+                                    <motion.div
                                       animate={{ scale: [1, 2.3], opacity: [0.3, 0] }}
                                       transition={{ repeat: Infinity, duration: 2, delay: 0.5, ease: "easeOut" }}
                                       className="absolute -inset-1 rounded-full border border-sky-400/20 -z-0"
@@ -2580,8 +2595,8 @@ export default function Home() {
 
                                   {/* Target Node: Deployed Token */}
                                   <div className="z-10 flex flex-col items-center">
-                                    <motion.div 
-                                      animate={{ 
+                                    <motion.div
+                                      animate={{
                                         borderColor: ['rgba(16,185,129,0.2)', 'rgba(16,185,129,0.6)', 'rgba(16,185,129,0.2)'],
                                         scale: [1, 1.05, 1]
                                       }}
@@ -2626,8 +2641,8 @@ export default function Home() {
                                         </linearGradient>
                                       </defs>
                                       <line x1="15%" y1="50%" x2="85%" y2="50%" stroke="rgba(255,255,255,0.05)" strokeWidth="4" strokeLinecap="round" />
-                                      <motion.line 
-                                        x1="15%" y1="50%" x2="85%" y2="50%" 
+                                      <motion.line
+                                        x1="15%" y1="50%" x2="85%" y2="50%"
                                         stroke="url(#mintGrad)" strokeWidth="4" strokeLinecap="round"
                                         strokeDasharray="40 180"
                                         animate={{ strokeDashoffset: [0, -220] }}
@@ -2637,7 +2652,7 @@ export default function Home() {
 
                                     {/* Source Node: Admin */}
                                     <div className="z-10 flex flex-col items-center">
-                                      <motion.div 
+                                      <motion.div
                                         animate={{ boxShadow: ['0 0 0 0px rgba(99,102,241,0.3)', '0 0 0 8px rgba(99,102,241,0)'] }}
                                         transition={{ repeat: Infinity, duration: 2 }}
                                         className="w-10 h-10 bg-indigo-950/80 border border-indigo-500/30 rounded-2xl flex items-center justify-center shadow-lg"
@@ -2650,12 +2665,12 @@ export default function Home() {
                                     {/* Precompile Node: B20 Token */}
                                     <div className="z-10 flex flex-col items-center relative">
                                       {/* Double Validation Rings */}
-                                      <motion.div 
+                                      <motion.div
                                         animate={{ scale: [1, 1.8], opacity: [0.6, 0] }}
                                         transition={{ repeat: Infinity, duration: 2, ease: "easeOut" }}
                                         className="absolute -inset-1 rounded-full border border-indigo-400/40 -z-0"
                                       />
-                                      <motion.div 
+                                      <motion.div
                                         animate={{ scale: [1, 2.3], opacity: [0.3, 0] }}
                                         transition={{ repeat: Infinity, duration: 2, delay: 0.5, ease: "easeOut" }}
                                         className="absolute -inset-1 rounded-full border border-indigo-400/20 -z-0"
@@ -2669,8 +2684,8 @@ export default function Home() {
 
                                     {/* Target Node: Recipient */}
                                     <div className="z-10 flex flex-col items-center">
-                                      <motion.div 
-                                        animate={{ 
+                                      <motion.div
+                                        animate={{
                                           borderColor: ['rgba(168,85,247,0.2)', 'rgba(168,85,247,0.6)', 'rgba(168,85,247,0.2)'],
                                           scale: [1, 1.05, 1]
                                         }}
@@ -2704,7 +2719,7 @@ export default function Home() {
                                       <line x1="50%" y1="50%" x2="20%" y2="20%" stroke="rgba(255,255,255,0.03)" strokeWidth="3" />
                                       <line x1="50%" y1="50%" x2="80%" y2="50%" stroke="rgba(255,255,255,0.03)" strokeWidth="3" />
                                       <line x1="50%" y1="50%" x2="20%" y2="80%" stroke="rgba(255,255,255,0.03)" strokeWidth="3" />
-                                      
+
                                       {/* Moving Laser Streams */}
                                       <motion.line
                                         x1="50%" y1="50%" x2="20%" y2="20%"
@@ -2793,7 +2808,7 @@ export default function Home() {
                               >
                                 {/* Running SVG laser stream */}
                                 <div className="w-full max-w-sm flex items-center justify-between relative h-20">
-                                  
+
                                   {/* Laser Line */}
                                   <svg className="absolute inset-0 w-full h-full pointer-events-none" preserveAspectRatio="none">
                                     <defs>
@@ -2804,8 +2819,8 @@ export default function Home() {
                                       </linearGradient>
                                     </defs>
                                     <line x1="15%" y1="50%" x2="85%" y2="50%" stroke="rgba(255,255,255,0.05)" strokeWidth="4" strokeLinecap="round" />
-                                    <motion.line 
-                                      x1="15%" y1="50%" x2="85%" y2="50%" 
+                                    <motion.line
+                                      x1="15%" y1="50%" x2="85%" y2="50%"
                                       stroke="url(#payGrad)" strokeWidth="4" strokeLinecap="round"
                                       strokeDasharray="40 180"
                                       animate={{ strokeDashoffset: [0, -220] }}
@@ -2815,7 +2830,7 @@ export default function Home() {
 
                                   {/* Source Node: Customer */}
                                   <div className="z-10 flex flex-col items-center">
-                                    <motion.div 
+                                    <motion.div
                                       animate={{ boxShadow: ['0 0 0 0px rgba(236,72,153,0.3)', '0 0 0 8px rgba(236,72,153,0)'] }}
                                       transition={{ repeat: Infinity, duration: 2 }}
                                       className="w-10 h-10 bg-pink-950/80 border border-pink-500/30 rounded-2xl flex items-center justify-center shadow-lg"
@@ -2828,12 +2843,12 @@ export default function Home() {
                                   {/* Precompile Node: Memo Log */}
                                   <div className="z-10 flex flex-col items-center relative">
                                     {/* Double Validation Rings */}
-                                    <motion.div 
+                                    <motion.div
                                       animate={{ scale: [1, 1.8], opacity: [0.6, 0] }}
                                       transition={{ repeat: Infinity, duration: 2, ease: "easeOut" }}
                                       className="absolute -inset-1 rounded-full border border-pink-400/40 -z-0"
                                     />
-                                    <motion.div 
+                                    <motion.div
                                       animate={{ scale: [1, 2.3], opacity: [0.3, 0] }}
                                       transition={{ repeat: Infinity, duration: 2, delay: 0.5, ease: "easeOut" }}
                                       className="absolute -inset-1 rounded-full border border-pink-400/20 -z-0"
@@ -2847,8 +2862,8 @@ export default function Home() {
 
                                   {/* Target Node: Merchant */}
                                   <div className="z-10 flex flex-col items-center">
-                                    <motion.div 
-                                      animate={{ 
+                                    <motion.div
+                                      animate={{
                                         borderColor: ['rgba(16,185,129,0.2)', 'rgba(16,185,129,0.6)', 'rgba(16,185,129,0.2)'],
                                         scale: [1, 1.05, 1]
                                       }}
@@ -2999,7 +3014,7 @@ export default function Home() {
               {/* Watchlist Tab */}
               {activeTab === 'portfolio' && (
                 <div className="space-y-12">
-                  
+
                   {/* SECTION 1: MY DEPLOYED TOKENS */}
                   <div className="space-y-6">
                     <div className="text-center md:text-left max-w-2xl space-y-2 mb-4 font-sans">
@@ -3312,7 +3327,7 @@ export default function Home() {
               {/* Right Side: Admin Actions */}
               <div className="space-y-5 bg-[#07080a]/50 p-5 rounded-3xl border border-white/5">
                 <h4 className="text-xs font-bold text-slate-300 border-b border-white/5 pb-2">Contract Admin Operations</h4>
-                
+
                 {/* Operation Success/Error */}
                 {adminOpError && (
                   <p className="text-[10px] text-rose-400 font-semibold bg-rose-950/15 p-2 rounded-lg border border-rose-900/20">{adminOpError}</p>
@@ -3413,7 +3428,7 @@ export default function Home() {
       <footer className="max-w-7xl mx-auto px-6 md:px-8 border-t border-white/5 pt-6 mt-12 w-full flex flex-col sm:flex-row justify-between items-center gap-4 text-xs font-semibold text-slate-600">
         <div className="flex flex-wrap items-center gap-3">
           <span className="bg-white/[0.02] border border-white/5 px-2.5 py-1 rounded-xl text-[10px] text-slate-500 uppercase tracking-widest font-mono font-bold select-none">
-            © {new Date().getFullYear()} DEPLOYB20
+            © {new Date().getFullYear()} B20DEPLOY
           </span>
           <span className="text-slate-800 hidden sm:inline select-none">•</span>
           <span className="flex items-center gap-1.5">
@@ -3473,7 +3488,7 @@ export default function Home() {
                     MetaMask / Coinbase / Browser Wallet
                     <span className="w-2.5 h-2.5 bg-blue-500 rounded-full"></span>
                   </button>
-                  
+
                   <div className="text-[10px] text-slate-500 leading-relaxed pt-2">
                     Note: B20 Tokens are supported on Base network. Make sure your wallet is active on Base Sepolia or Base Vibenet.
                   </div>

@@ -315,7 +315,7 @@ export default function Home() {
       }
     };
     loadWatchlist();
-  }, [walletAddress, walletConnected]);
+  }, [walletAddress, walletConnected, chainId]);
 
   // Auto-connect wallet if previously connected
   useEffect(() => {
@@ -792,15 +792,44 @@ export default function Home() {
         throw new Error('Transaction succeeded, but no B20 token precompile address (0xB200...) was found in receipt logs.');
       }
 
-      const tokenInfo = await fetchOnchainToken(tokenAddress as `0x${string}`, chainId, walletAddress as `0x${string}`);
+      // Wait 2.5s for block state propagation to prevent RPC node replication lag errors
+      await new Promise(r => setTimeout(r, 2500));
 
-      const newToken: DeployedToken = {
-        name: tokenInfo.name,
-        symbol: tokenInfo.symbol,
-        totalSupply: tokenInfo.totalSupply,
-        decimals: tokenInfo.decimals.toString(),
+      let tokenInfo;
+      let retries = 5;
+      while (retries > 0) {
+        try {
+          tokenInfo = await fetchOnchainToken(tokenAddress as `0x${string}`, chainId, walletAddress as `0x${string}`);
+          break;
+        } catch (err: any) {
+          retries--;
+          if (retries === 0) break; // fall through to form-data fallback below
+          await new Promise(r => setTimeout(r, 3000));
+        }
+      }
+
+      // If onchain read still failed after retries, build from known form data (RPC replica lag fallback)
+      const fallbackDecimals = variant === 'ASSET' ? parseInt(decimals) : 6;
+      const fallbackToken = !tokenInfo ? {
+        name,
+        symbol: symbol.toUpperCase(),
+        totalSupply: '0',
+        decimals: fallbackDecimals,
+        isMinter: grantSelfMintRole,
+        isAdmin: true,
+        paused: false,
         address: tokenAddress,
-        mintable: tokenInfo.isMinter,
+      } : null;
+
+
+      const src = tokenInfo ?? fallbackToken!;
+      const newToken: DeployedToken = {
+        name: src.name,
+        symbol: src.symbol,
+        totalSupply: src.totalSupply,
+        decimals: src.decimals.toString(),
+        address: tokenAddress,
+        mintable: src.isMinter,
         burnable: true,
         pausable: true,
         blacklistable: false,
@@ -811,13 +840,17 @@ export default function Home() {
         antiWhale: false,
         maxTxPercent: '0',
         maxWalletPercent: '0',
-        isPaused: tokenInfo.paused,
-        isRenounced: !tokenInfo.isAdmin,
+        isPaused: src.paused,
+        isRenounced: !src.isAdmin,
         custom: true,
         chainId: chainId
       };
 
       setDeployedTokenResult(newToken);
+      if (fallbackToken) {
+        // Soft note — not an error. Supply shows 0 until re-inspected from workspace.
+        console.info(`[B20] RPC lag: token details saved from form data. Re-inspect ${tokenAddress} later for live supply.`);
+      }
 
       const nextTokens = [newToken, ...userTokens];
       setUserTokens(nextTokens);
@@ -880,32 +913,41 @@ export default function Home() {
 
   // ----------------------------------------------------
   // Mint Tab Functions
-  const handleMintSearch = async (e?: React.FormEvent) => {
+  const handleMintSearch = async (e?: React.FormEvent, overrideAddr?: string, isBackgroundRefresh?: boolean) => {
     if (e) e.preventDefault();
-    if (!mintQueryAddr.trim() || !mintQueryAddr.startsWith('0x') || mintQueryAddr.length !== 42) {
+    const searchAddr = overrideAddr || mintQueryAddr;
+    if (!searchAddr.trim() || !searchAddr.startsWith('0x') || searchAddr.length !== 42) {
       setMintQueryError('Please enter a valid 42-character contract address.');
       return;
     }
 
     setMintQueryLoading(true);
     setMintQueryError(null);
-    setMintTokenDetails(null);
-    setMintTxSuccess(null);
-    setMintTxError(null);
+    // Only clear token details and success/error when this is a fresh user-initiated search
+    if (!isBackgroundRefresh) {
+      setMintTokenDetails(null);
+      setMintTxSuccess(null);
+      setMintTxError(null);
+    }
 
     try {
       const details = await fetchOnchainToken(
-        mintQueryAddr as `0x${string}`,
+        searchAddr as `0x${string}`,
         chainId,
         walletAddress ? (walletAddress as `0x${string}`) : undefined
       );
       setMintTokenDetails(details);
-      if (walletAddress) {
+      if (walletAddress && !isBackgroundRefresh) {
         setMintRecipient(walletAddress);
       }
     } catch (err: any) {
-      console.error(err);
-      setMintQueryError(err.message || 'Inspection failed. Ensure your wallet is on the correct network.');
+      if (isBackgroundRefresh) {
+        // Silently ignore — the mint succeeded; this is just a cosmetic supply refresh
+        console.warn('[B20] Post-mint re-inspection failed (RPC lag), ignoring:', err.message);
+      } else {
+        console.error(err);
+        setMintQueryError(err.message || 'Inspection failed. Ensure your wallet is on the correct network.');
+      }
     } finally {
       setMintQueryLoading(false);
     }
@@ -987,7 +1029,7 @@ export default function Home() {
       setMintAmount('');
 
       await fetchBalance(activeAddress, chainId);
-      await handleMintSearch();
+      await handleMintSearch(undefined, mintTokenDetails.address, true);
     } catch (err: any) {
       console.error(err);
       setMintTxError(err.message || 'Transaction rejected or reverted.');
@@ -1151,7 +1193,7 @@ export default function Home() {
       setBatchMintSuccess(txHash || 'batch_success');
       setBatchRecipientList('');
       await fetchBalance(activeAddress as string, chainId);
-      await handleMintSearch();
+      await handleMintSearch(undefined, mintTokenDetails.address, true);
     } catch (err: any) {
       console.error(err);
       setBatchMintError(err.message || 'Batch transaction rejected or reverted.');
@@ -1163,34 +1205,41 @@ export default function Home() {
 
   // ----------------------------------------------------
   // Payment Tab Functions
-  const handlePaySearch = async (e?: React.FormEvent) => {
+  const handlePaySearch = async (e?: React.FormEvent, overrideAddr?: string, isBackgroundRefresh?: boolean) => {
     if (e) e.preventDefault();
-    if (!payQueryAddr.trim() || !payQueryAddr.startsWith('0x') || payQueryAddr.length !== 42) {
+    const searchAddr = overrideAddr || payQueryAddr;
+    if (!searchAddr.trim() || !searchAddr.startsWith('0x') || searchAddr.length !== 42) {
       setPayQueryError('Please enter a valid 42-character contract address.');
       return;
     }
 
     setPayQueryLoading(true);
     setPayQueryError(null);
-    setPayTokenDetails(null);
-    setPayTxSuccess(null);
-    setPayTxError(null);
-    setPayMemosList([]);
+    if (!isBackgroundRefresh) {
+      setPayTokenDetails(null);
+      setPayTxSuccess(null);
+      setPayTxError(null);
+      setPayMemosList([]);
+    }
 
     try {
       const details = await fetchOnchainToken(
-        payQueryAddr as `0x${string}`,
+        searchAddr as `0x${string}`,
         chainId,
         walletAddress ? (walletAddress as `0x${string}`) : undefined
       );
       setPayTokenDetails(details);
 
       setPayMemosLoading(true);
-      const memos = await fetchB20Memos(payQueryAddr as `0x${string}`, chainId);
+      const memos = await fetchB20Memos(searchAddr as `0x${string}`, chainId);
       setPayMemosList(memos);
     } catch (err: any) {
-      console.error(err);
-      setPayQueryError(err.message || 'Inspection failed. Ensure your wallet is on the correct network.');
+      if (isBackgroundRefresh) {
+        console.warn('[B20] Post-pay re-inspection failed (RPC lag), ignoring:', err.message);
+      } else {
+        console.error(err);
+        setPayQueryError(err.message || 'Inspection failed. Ensure your wallet is on the correct network.');
+      }
     } finally {
       setPayQueryLoading(false);
       setPayMemosLoading(false);
@@ -1278,7 +1327,7 @@ export default function Home() {
       setPayMemo('');
 
       await fetchBalance(activeAddress, chainId);
-      await handlePaySearch();
+      await handlePaySearch(undefined, payTokenDetails?.address, true);
     } catch (err: any) {
       console.error(err);
       setPayTxError(err.message || 'Transaction rejected or reverted.');
@@ -2179,13 +2228,13 @@ export default function Home() {
                               {mintQueryError && <p className="text-xs text-rose-400 mt-1">{mintQueryError}</p>}
                             </form>
 
-                            {userTokens.length > 0 && (
+                            {userTokens.filter(t => t.chainId === chainId).length > 0 && (
                               <div className="pt-2 flex flex-wrap items-center gap-1.5">
                                 <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mr-1">Watchlist:</span>
-                                {userTokens.map((t) => (
+                                {userTokens.filter(t => t.chainId === chainId).map((t) => (
                                   <button
                                     key={t.address}
-                                    onClick={() => { setMintQueryAddr(t.address); setMintTokenDetails(null); setMintQueryError(null); setMintTxSuccess(null); setMintTxError(null); setMintQueryLoading(true); fetchOnchainToken(t.address as `0x${string}`, chainId, walletAddress ? (walletAddress as `0x${string}`) : undefined).then(details => { setMintTokenDetails(details); setMintRecipient(walletAddress || ''); }).catch(err => setMintQueryError(err.message)).finally(() => setMintQueryLoading(false)); }}
+                                    onClick={() => { setMintQueryAddr(t.address); handleMintSearch(undefined, t.address); }}
                                     className="text-[10px] bg-[#07080a] hover:bg-white/5 border border-white/5 px-2.5 py-1 rounded-lg text-blue-400 cursor-pointer font-mono font-bold"
                                   >
                                     {t.symbol}
@@ -2393,14 +2442,14 @@ export default function Home() {
                               {payQueryError && <p className="text-xs text-rose-400 mt-1">{payQueryError}</p>}
                             </form>
 
-                            {userTokens.length > 0 && (
+                            {userTokens.filter(t => t.chainId === chainId).length > 0 && (
                               <div className="pt-2 flex flex-wrap items-center gap-1.5 border-t border-white/5 mt-2">
                                 <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mr-1">Watchlist:</span>
-                                {userTokens.map((t) => (
+                                {userTokens.filter(t => t.chainId === chainId).map((t) => (
                                   <button
                                     key={t.address}
                                     type="button"
-                                    onClick={() => { setPayQueryAddr(t.address); setPayTokenDetails(null); setPayQueryError(null); setPayTxSuccess(null); setPayTxError(null); setPayQueryLoading(true); fetchOnchainToken(t.address as `0x${string}`, chainId, walletAddress ? (walletAddress as `0x${string}`) : undefined).then(details => { setPayTokenDetails(details); setPayRecipient(''); }).catch(err => setPayQueryError(err.message)).finally(() => setPayQueryLoading(false)); }}
+                                    onClick={() => { setPayQueryAddr(t.address); handlePaySearch(undefined, t.address); }}
                                     className="text-[10px] bg-[#07080a] hover:bg-white/5 border border-white/5 px-2.5 py-1 rounded-lg text-blue-400 cursor-pointer font-mono font-bold"
                                   >
                                     {t.symbol}
@@ -3033,7 +3082,7 @@ export default function Home() {
                         <Wallet className="w-6 h-6 text-slate-600 animate-pulse" />
                         <span>Please connect your web3 wallet to view your deployed tokens.</span>
                       </div>
-                    ) : userTokens.length === 0 ? (
+                    ) : userTokens.filter(token => token.chainId === chainId).length === 0 ? (
                       <div className="text-center py-16 text-slate-500 bg-[#0d0f14]/40 rounded-3xl border border-white/5 border-dashed text-sm flex flex-col items-center gap-3 max-w-xl mx-auto">
                         <Rocket className="w-8 h-8 text-slate-600" />
                         <div>
@@ -3043,7 +3092,7 @@ export default function Home() {
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-                        {userTokens.map((token) => (
+                        {userTokens.filter(token => token.chainId === chainId).map((token) => (
                           <div
                             key={token.address}
                             className="p-5 bg-[#0f1115] rounded-3xl border border-white/5 hover:border-white/10 transition-all shadow-md group relative text-left"
@@ -3096,13 +3145,13 @@ export default function Home() {
 
                             <div className="pt-4 flex gap-2">
                               <button
-                                onClick={() => { setMintQueryAddr(token.address); handleMintSearch(); setActiveTab('workspace'); setWorkspaceTab('mint'); }}
+                                onClick={() => { setMintQueryAddr(token.address); handleMintSearch(undefined, token.address); setActiveTab('workspace'); setWorkspaceTab('mint'); }}
                                 className="flex-1 py-1.5 bg-blue-600/10 hover:bg-blue-600 border border-blue-500/10 text-blue-400 hover:text-white rounded-xl text-[10px] font-bold cursor-pointer transition-all"
                               >
                                 Mint
                               </button>
                               <button
-                                onClick={() => { setPayQueryAddr(token.address); handlePaySearch(); setActiveTab('workspace'); setWorkspaceTab('payment'); }}
+                                onClick={() => { setPayQueryAddr(token.address); handlePaySearch(undefined, token.address); setActiveTab('workspace'); setWorkspaceTab('payment'); }}
                                 className="flex-1 py-1.5 bg-pink-600/10 hover:bg-pink-600 border border-pink-500/10 text-pink-400 hover:text-white rounded-xl text-[10px] font-bold cursor-pointer transition-all"
                               >
                                 Pay
@@ -3227,13 +3276,13 @@ export default function Home() {
                                   {isWatched ? '✓ Watching' : '+ Watch'}
                                 </button>
                                 <button
-                                  onClick={() => { setMintQueryAddr(token.address); handleMintSearch(); setActiveTab('workspace'); setWorkspaceTab('mint'); }}
+                                  onClick={() => { setMintQueryAddr(token.address); handleMintSearch(undefined, token.address); setActiveTab('workspace'); setWorkspaceTab('mint'); }}
                                   className="py-1.5 px-3 bg-[#07080a] hover:bg-slate-800 border border-white/5 text-slate-300 rounded-xl text-[10px] font-bold cursor-pointer transition-all"
                                 >
                                   Mint
                                 </button>
                                 <button
-                                  onClick={() => { setPayQueryAddr(token.address); handlePaySearch(); setActiveTab('workspace'); setWorkspaceTab('payment'); }}
+                                  onClick={() => { setPayQueryAddr(token.address); handlePaySearch(undefined, token.address); setActiveTab('workspace'); setWorkspaceTab('payment'); }}
                                   className="py-1.5 px-3 bg-[#07080a] hover:bg-slate-800 border border-white/5 text-slate-300 rounded-xl text-[10px] font-bold cursor-pointer transition-all"
                                 >
                                   Pay

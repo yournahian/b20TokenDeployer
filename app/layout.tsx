@@ -4,6 +4,9 @@ import './globals.css'; // Global styles
 export const metadata: Metadata = {
   title: 'B20 Token Deployer — Deploy & Mint B20 Tokens on Base',
   description: 'Deploy and mint B20 tokens on Base in one click — Base\'s native ERC-20 superset precompile with built-in roles, supply caps, and pausing.',
+  icons: {
+    icon: '/b20.png',
+  }
 };
 
 export default function RootLayout({children}: {children: React.ReactNode}) {

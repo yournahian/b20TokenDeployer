@@ -1674,20 +1674,16 @@ export default function Home() {
             {/* Logo */}
             <div
               onClick={() => setActiveTab('home')}
-              className="flex items-center gap-2.5 cursor-pointer hover:opacity-90 select-none group"
+              className="flex flex-col items-center justify-center cursor-pointer hover:opacity-90 select-none group gap-1"
             >
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/20 group-hover:scale-105 transition-transform duration-200 shrink-0">
-                <span className="text-white font-extrabold text-sm">B</span>
-              </div>
-              <div className="flex flex-col justify-center leading-none">
-                <span className="font-extrabold text-[15px] text-white tracking-tight flex items-center gap-1.5 leading-none mb-0.5">
-                  DEPLOY<span className="text-blue-500">B20</span>
-                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                </span>
-                <span className="text-[9px] text-slate-500 font-mono tracking-widest font-bold uppercase leading-none">
-                  Base L2 Ecosystem
-                </span>
-              </div>
+              <img
+                src="/b20.png"
+                alt="B20 Logo"
+                className="h-7 w-auto rounded object-contain shadow-lg group-hover:scale-105 transition-transform duration-200 shrink-0"
+              />
+              <span className="text-[8px] font-sans font-bold text-slate-500 uppercase tracking-widest leading-none select-none">
+                Token Deployer
+              </span>
             </div>
 
             {/* Nav links */}
@@ -3415,8 +3411,25 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="max-w-7xl mx-auto px-6 md:px-8 border-t border-white/5 pt-6 mt-12 w-full flex flex-col sm:flex-row justify-between items-center gap-4 text-xs font-semibold text-slate-600">
-        <div>
-          © {new Date().getFullYear()} DEPLOYB20. All transactions sign securely via connected web3 wallet.
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="bg-white/[0.02] border border-white/5 px-2.5 py-1 rounded-xl text-[10px] text-slate-500 uppercase tracking-widest font-mono font-bold select-none">
+            © {new Date().getFullYear()} DEPLOYB20
+          </span>
+          <span className="text-slate-800 hidden sm:inline select-none">•</span>
+          <span className="flex items-center gap-1.5">
+            <span className="text-slate-500 text-[11px]">Created by</span>
+            <a
+              href="https://x.com/yournahian"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-2.5 py-1 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/15 rounded-xl transition-all font-bold inline-flex items-center gap-1.5 align-middle text-[11px] shadow-sm shadow-blue-500/5 hover:-translate-y-0.5 duration-200"
+            >
+              <svg className="w-2.5 h-2.5 fill-current shrink-0" viewBox="0 0 24 24">
+                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+              </svg>
+              @yournahian
+            </a>
+          </span>
         </div>
         <div className="flex gap-4">
           <Link href="/mcp" className="hover:text-slate-400 transition-colors">

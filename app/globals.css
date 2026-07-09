@@ -1,0 +1,15 @@
+@import "tailwindcss";
+
+@theme {
+  /* Override backgrounds for Sleek theme */
+  --color-slate-950: #050505;
+  --color-slate-900: #0f1115;
+  --color-slate-850: #14171e;
+  --color-slate-800: #1e242f;
+
+  /* Accent mapping: convert sky to beautiful sleek royal blue/indigo */
+  --color-sky-500: #2563eb;
+  --color-sky-400: #3b82f6;
+  --color-sky-300: #60a5fa;
+  --color-sky-950: #080c14;
+}

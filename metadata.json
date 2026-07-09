@@ -1,0 +1,6 @@
+{
+  "name": "B20 Token Deployer",
+  "description": "A modern, mobile-responsive web platform to configure, deploy, and manage B20 standard tokens on the Base Network.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -74,11 +74,10 @@ export function getPublicClient(chainId: number) {
 // B20 Factory Address
 export const B20_FACTORY_ADDRESS = '0xB20f000000000000000000000000000000000000';
 
-// Configurable B20Deployer custom Solidity wrapper contract address.
-// If set to an address (e.g. '0xe1585cfc9b5b927fea2c3b0c72ca35361243d535' or your new deployed contract), 
-// the site will route deployments in a single transaction through this contract.
-// If empty, the site falls back to direct factory precompile deployment (Option A/two transactions).
-export const B20_DEPLOYER_CONTRACT_ADDRESS: string = '0x7a09f1a886c8b017653485292bbafc111ccc7e68';
+export const B20_DEPLOYER_CONTRACT_ADDRESSES: Record<number, string> = {
+  8453: process.env.NEXT_PUBLIC_BASE_DEPLOYER_ADDRESS || '0x7a09f1a886c8b017653485292bbafc111ccc7e68', // Base Mainnet
+  84532: process.env.NEXT_PUBLIC_BASE_SEPOLIA_DEPLOYER_ADDRESS || '0x9E2C62375dd16D4B365Ade47872EB8579ffEC558', // Base Sepolia
+};
 
 // ABI for B20Deployer wrapper
 export const B20_DEPLOYER_ABI = [

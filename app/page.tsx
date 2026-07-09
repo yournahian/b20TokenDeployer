@@ -648,8 +648,9 @@ export default function Home() {
 
       let txHash = '';
 
-      // Check if wrapper contract address is configured for Option B (Single transaction deployment)
-      if (B20_DEPLOYER_CONTRACT_ADDRESS && B20_DEPLOYER_CONTRACT_ADDRESS.startsWith('0x')) {
+      // Check if wrapper contract address is configured for Option B (Single transaction deployment) - Only used on Base Mainnet (chainId 8453)
+      const activeDeployerAddress = (chainId === 8453) ? B20_DEPLOYER_CONTRACT_ADDRESS : '';
+      if (activeDeployerAddress && activeDeployerAddress.startsWith('0x')) {
         // Encode deployB20Token call on the wrapper contract
         const wrapperData = encodeFunctionData({
           abi: B20_DEPLOYER_ABI,
@@ -670,7 +671,7 @@ export default function Home() {
           method: 'eth_sendTransaction',
           params: [{
             from: walletAddress,
-            to: B20_DEPLOYER_CONTRACT_ADDRESS,
+            to: activeDeployerAddress,
             data: wrapperData,
             value: feeVal,
             gas: '0x3D0900', // 4,000,000 — covers createB20 + initCalls
@@ -755,7 +756,7 @@ export default function Home() {
       const TOKEN_DEPLOYED_TOPIC = '0xf1d58912d8d6d39cd9fee0f074ee57836907d09dddb0ce7706b7c7a0ddc15d50';
       
       const FACTORY_ADDR = B20_FACTORY_ADDRESS.toLowerCase();
-      const DEPLOYER_ADDR = B20_DEPLOYER_CONTRACT_ADDRESS ? B20_DEPLOYER_CONTRACT_ADDRESS.toLowerCase() : '';
+      const DEPLOYER_ADDR = activeDeployerAddress ? activeDeployerAddress.toLowerCase() : '';
 
       if (receipt.logs) {
         for (const log of receipt.logs) {
@@ -1287,7 +1288,7 @@ export default function Home() {
   };
 
   const fetchDeployerAdminDetails = async () => {
-    if (!B20_DEPLOYER_CONTRACT_ADDRESS || !walletConnected) return;
+    if (chainId !== 8453 || !B20_DEPLOYER_CONTRACT_ADDRESS || !walletConnected) return;
     setAdminDetailsLoading(true);
     try {
       const provider = (window as any).ethereum;
